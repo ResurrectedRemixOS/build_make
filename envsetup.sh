@@ -58,8 +58,8 @@ function build_build_var_cache()
     local T=$(gettop)
     local one_true_awk=$T/prebuilts/build-tools/$(get_host_prebuilt_prefix)/bin/one-true-awk
     # Grep out the variable names from the script.
-    cached_vars=(`cat $T/build/envsetup.sh $T/vendor/lineage/build/envsetup.sh | tr '()' '  ' | $one_true_awk '{for(i=1;i<=NF;i++) if($i~/_get_build_var_cached/) print $(i+1)}' | grep -vE "^(print|COMMON_LUNCH_CHOICES)$" | sort -u | tr '\n' ' '`)
-    cached_abs_vars=(`cat $T/build/envsetup.sh $T/vendor/lineage/build/envsetup.sh | tr '()' '  ' | $one_true_awk '{for(i=1;i<=NF;i++) if($i~/_get_abs_build_var_cached/) print $(i+1)}' | grep -vE "^(print|COMMON_LUNCH_CHOICES)$" | sort -u | tr '\n' ' '`)
+    cached_vars=(`cat $T/build/envsetup.sh $T/vendor/rr/build/envsetup.sh | tr '()' '  ' | $one_true_awk '{for(i=1;i<=NF;i++) if($i~/_get_build_var_cached/) print $(i+1)}' | grep -vE "^(print|COMMON_LUNCH_CHOICES)$" | sort -u | tr '\n' ' '`)
+    cached_abs_vars=(`cat $T/build/envsetup.sh $T/vendor/rr/build/envsetup.sh | tr '()' '  ' | $one_true_awk '{for(i=1;i<=NF;i++) if($i~/_get_abs_build_var_cached/) print $(i+1)}' | grep -vE "^(print|COMMON_LUNCH_CHOICES)$" | sort -u | tr '\n' ' '`)
     # Call the build system to dump the "<val>=<value>" pairs as a shell script.
     build_dicts_script=`\builtin cd $T; build/soong/soong_ui.bash --dumpvars-mode \
                         --vars="${cached_vars[*]}" \
@@ -573,6 +573,17 @@ function lunch()
     local legacy=$(echo $1 | grep "-")
     if [[ $# -eq 1 && -n $legacy ]]; then
         IFS="-" read -r product release variant <<< "$1"
+        # product-userdebug, with no release in the middle. The release is the
+        # one Lineage already selected in vendor/rr/vars/aosp_target_release.
+        if [[ -n "$product" && -n "$release" && -z "$variant" && "$release" =~ ^(user|userdebug|eng)$ ]]; then
+            variant=$release
+            local top
+            top=$(gettop)
+            if [[ -f "$top/vendor/rr/vars/aosp_target_release" ]]; then
+                source "$top/vendor/rr/vars/aosp_target_release"
+            fi
+            release=${aosp_target_release:-trunk_staging}
+        fi
         if [[ -z "$product" ]] || [[ -z "$release" ]] || [[ -z "$variant" ]]; then
             echo "Invalid lunch combo: $1" 1>&2
             echo "Valid combos must be of the form <product>-<release>-<variant> when using" 1>&2
@@ -599,13 +610,13 @@ function lunch()
         # if we can't find a product, try to grab it off the LineageOS GitHub
         T=$(gettop)
         cd $T > /dev/null
-        vendor/lineage/build/tools/roomservice.py $product
+        vendor/rr/build/tools/roomservice.py $product
         cd - > /dev/null
         check_product $product $release
     else
         T=$(gettop)
         cd $T > /dev/null
-        vendor/lineage/build/tools/roomservice.py $product true
+        vendor/rr/build/tools/roomservice.py $product true
         cd - > /dev/null
     fi
 
@@ -1246,4 +1257,4 @@ fi
 
 export ANDROID_BUILD_TOP=$(gettop)
 
-. $ANDROID_BUILD_TOP/vendor/lineage/build/envsetup.sh
+. $ANDROID_BUILD_TOP/vendor/rr/build/envsetup.sh
